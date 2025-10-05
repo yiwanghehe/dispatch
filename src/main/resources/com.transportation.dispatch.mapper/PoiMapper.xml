@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.transportation.dispatch.mapper.PoiMapper">
+    <update id="update">
+        update poi
+        <set>
+            <if test="name != null and name != ''">
+                name = #{name},
+            </if>
+            <if test="lng != null and lng != ''">
+                lng = #{lng},
+            </if>
+            <if test="lat != null and lat != ''">
+                lat = #{lat},
+            </if>
+            <if test="type != null and type != ''">
+                type = #{type}
+            </if>
+            <if test="status != null and status != ''">
+                status = #{status}
+            </if>
+            <if test="create_time != null and create_time != ''">
+                create_time = #{createTime}
+            </if>
+        </set>
+        where id = #{id}
+    </update>
+</mapper>
