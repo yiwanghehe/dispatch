@@ -38,7 +38,7 @@ public class RouteServiceImpl implements RouteService {
     @Value("${api.key}")
     private String amapApiKey;
 
-    private static final long API_CALL_DELAY_MS = 400; // 每次API调用后暂停400毫秒，确保不超过3次/秒的QPS
+    private static final long API_CALL_DELAY_MS = 360; // 每次API调用后暂停一定毫秒，确保不超过3次/秒的QPS
 
     /**
      * 获取两点之间的驾驶路径。
@@ -162,21 +162,28 @@ public class RouteServiceImpl implements RouteService {
                 String originCoords = origin.getLng() + "," + origin.getLat();
                 String destCoords = dest.getLng() + "," + dest.getLat();
 
-                // getRoute内部会处理缓存检查，我们只需直接调用
-                getRoute(originCoords, destCoords);
+                // 使用不延时版本的getRoute
+                RouteCache cachedRoute = routeCacheMapper.findByOriginAndDestination(originCoords, destCoords);
+                if (cachedRoute != null) {
+                    log.info("路径缓存命中: {} -> {}", originCoords, destCoords);
+                } else {
+                    // 缓存未命中，调用高德API并延时
+                    log.info("路径缓存未命中，正在调用高德API: {} -> {}", originCoords, destCoords);
+                    callAmapApiAndCache(originCoords, destCoords);
+
+                    // 强制延时，保护API的QPS（仅在调用API时延时）
+                    try {
+                        Thread.sleep(API_CALL_DELAY_MS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        log.error("路径预热任务被中断。", e);
+                        return; // 任务被中断，提前退出
+                    }
+                }
 
                 processedCount++;
                 if (processedCount % 100 == 0) {
                     log.info("阶段 [{} -> {}]: 已处理 {} / {} 条路径。", stage.getOriginPoiType(), stage.getDestinationPoiType(), processedCount, totalPairs);
-                }
-
-                // 4. 强制延时，保护API的QPS
-                try {
-                    Thread.sleep(API_CALL_DELAY_MS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    log.error("路径预热任务被中断。", e);
-                    return; // 任务被中断，提前退出
                 }
             }
         }

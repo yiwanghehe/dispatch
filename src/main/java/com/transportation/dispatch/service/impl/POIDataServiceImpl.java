@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @Service
@@ -19,19 +21,25 @@ public class POIDataServiceImpl implements POIDataService {
     private PoiMapper poiMapper;
 
     @Override
-    public Result insert(RawPOI rawPOI) {
+    public Result insert(RawPOI rawPOI, PoiSimType simType) {
 
         Poi poi = new Poi();
 
         poi.setAmapId(rawPOI.getId());
         poi.setName(rawPOI.getName());
-        poi.setType(rawPOI.getType());
-        poi.setStatus(1);
-        poi.setCreateTime(LocalDateTime.now());
+        poi.setAddress(rawPOI.getAddress());
 
-        String[] tmp = rawPOI.getLocation().split(",");
-        poi.setLng(tmp[0]);
-        poi.setLat(tmp[1]);
+        String[] location = rawPOI.getLocation().split(",");
+        poi.setLng(location[0]);
+        poi.setLat(location[1]);
+
+        poi.setPname(rawPOI.getPname());
+        poi.setCityname(rawPOI.getCityname());
+        poi.setAdname(rawPOI.getAdname());
+        poi.setType(rawPOI.getType());
+        poi.setTypecode(rawPOI.getTypecode());
+        poi.setSimType(simType);
+        poi.setStatus(1);
 
         // 先查看数据库内有没有这个poi，没有再插入
         Poi DB_poi = poiMapper.findById(poi.getId());
@@ -73,9 +81,9 @@ public class POIDataServiceImpl implements POIDataService {
     }
 
     @Override
-    public Result addPOIs(List<RawPOI> rawPOIs){
+    public Result addPOIs(List<RawPOI> rawPOIs, PoiSimType simType){
         for(RawPOI poi : rawPOIs){
-            Result result = insert(poi);
+            Result result = insert(poi, simType);
             if(result.getCode() != 200) return Result.error("添加失败");
         }
         return Result.success();
@@ -87,6 +95,11 @@ public class POIDataServiceImpl implements POIDataService {
         List<Poi> allPOI = poiMapper.findAll();
         if(allPOI == null) return Result.error("错误，数据库为空");
         else return Result.success(allPOI);
+    }
+
+    @Override
+    public List<PoiSimType> getAllSimType() {
+        return Arrays.asList(PoiSimType.values());
     }
 
 

@@ -9,7 +9,7 @@ import java.util.List;
 
 
 public interface POIDataService {
-    Result insert(RawPOI rawPOI);
+    Result insert(RawPOI rawPOI, PoiSimType simType);
 
     Result findById(Long id);
 
@@ -19,8 +19,10 @@ public interface POIDataService {
 
     Result delete(Long id);
 
-    Result addPOIs(List<RawPOI> rawPOIs);
+    Result addPOIs(List<RawPOI> rawPOIs, PoiSimType simType);
 
     Result getAll();
+
+    List<PoiSimType> getAllSimType();
 
 }

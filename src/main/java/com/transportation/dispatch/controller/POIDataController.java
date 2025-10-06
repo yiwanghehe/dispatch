@@ -7,7 +7,9 @@ import com.transportation.dispatch.model.entity.Poi;
 import com.transportation.dispatch.service.POIDataInitializationService;
 import com.transportation.dispatch.service.POIDataService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,8 +30,8 @@ public class POIDataController {
 
     @Operation(summary = "添加完整信息")
     @PostMapping("/insert")
-    public Result insert(@RequestBody RawPOI rawPOI) {
-        return poiDataService.insert(rawPOI);
+    public Result insert(@RequestBody RawPOI rawPOI, @RequestBody PoiSimType simType) {
+        return poiDataService.insert(rawPOI, simType);
     }
 
     @Operation(summary = "查询id对应的信息")
@@ -38,10 +40,22 @@ public class POIDataController {
         return poiDataService.findById(id);
     }
 
-    @Operation(summary = "查询自定义类型simType查询Poi信息")
+    @Operation(summary = "根据自定义类型simType查询Poi信息")
     @GetMapping("/findBySimType/{simType}")
     public Result findBySimType(@PathVariable PoiSimType simType) {
         return poiDataService.findBySimType(simType);
+    }
+
+    @Operation(summary = "查询所有自定义类型simType")
+    @GetMapping("/getAllSimType")
+    public Result getAllSimType() {
+        try {
+            List<PoiSimType> list = poiDataService.getAllSimType();
+            return Result.success(list);
+        } catch(Exception e) {
+            return Result.error("获取PoiSimType失败");
+        }
+
     }
 
     @Operation(summary = "更新信息")
@@ -58,8 +72,8 @@ public class POIDataController {
 
     @Operation(summary = "批量添加poi")
     @PostMapping("/addpois")
-    public Result addPOIs(@RequestBody List<RawPOI> rawPOIs) {
-        return poiDataService.addPOIs(rawPOIs);
+    public Result addPOIs(@RequestBody List<RawPOI> rawPOIs, @RequestParam PoiSimType simType) {
+        return poiDataService.addPOIs(rawPOIs, simType);
     }
 
     @Operation(summary = "返回所有poi")

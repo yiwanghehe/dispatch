@@ -2,10 +2,7 @@ package com.transportation.dispatch.mapper;
 
 import com.transportation.dispatch.model.entity.SupplyChainStage;
 import com.transportation.dispatch.model.entity.SupplyChainTemplate;
-import org.apache.ibatis.annotations.Insert;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Options;
-import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.*;
 
 import java.util.List;
 
@@ -23,6 +20,15 @@ public interface SupplyChainMapper {
     @Select("SELECT COUNT(*) FROM supply_chain_template")
     long countTemplates();
 
+    @Select("SELECT * FROM supply_chain_template")
+    List<SupplyChainTemplate> findAllTemplates();
+
     @Select("SELECT * FROM supply_chain_stage ORDER BY template_id, stage_order")
     List<SupplyChainStage> findAllStages();
+
+    /**
+     * 【新增】根据模板ID和阶段序号查找阶段信息
+     */
+    @Select("SELECT * FROM supply_chain_stage WHERE template_id = #{templateId} AND stage_order = #{stageOrder}")
+    SupplyChainStage findStageByTemplateIdAndOrder(@Param("templateId") Long templateId, @Param("stageOrder") int stageOrder);
 }
