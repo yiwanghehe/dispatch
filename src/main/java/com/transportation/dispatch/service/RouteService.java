@@ -16,4 +16,6 @@ public interface RouteService {
      * 为所有供应链阶段预热并缓存路径
      */
     void initializeAllRoutes();
+
+    String normalizeCoords(String coords);
 }

@@ -74,6 +74,7 @@ public class DispatchServiceImpl implements DispatchService {
         // 更新车辆状态
         vehicle.setStatus(VehicleStatus.MOVING_TO_PICKUP);
         vehicle.setCurrentDemandId(demand.getId());
+        vehicle.setSpeed(10.0);
         vehicleMapper.update(vehicle);
 
         log.info("任务 #{} 已成功分配给车辆 #{} ({})", demand.getId(), vehicle.getId(), vehicle.getPlateNumber());
