@@ -49,19 +49,26 @@ public class RouteServiceImpl implements RouteService {
      */
     @Override
     public RouteCache getRoute(String originCoords, String destinationCoords) {
+        String normalizedOrigin = normalizeCoords(originCoords);
+        String normalizedDestination = normalizeCoords(destinationCoords);
         // 1. 优先查询数据库缓存
-        RouteCache cachedRoute = routeCacheMapper.findByOriginAndDestination(originCoords, destinationCoords);
+        RouteCache cachedRoute = routeCacheMapper.findByOriginAndDestination(normalizedOrigin, normalizedDestination);
         if (cachedRoute != null) {
-            log.info("路径缓存命中: {} -> {}", originCoords, destinationCoords);
+            log.info("路径缓存命中: {} -> {}", normalizedOrigin, normalizedDestination);
             return cachedRoute;
         }
 
-        // 2. 缓存未命中，调用高德API
-        log.info("路径缓存未命中，正在调用高德API: {} -> {}", originCoords, destinationCoords);
-        return callAmapApiAndCache(originCoords, destinationCoords);
+        // 2. 缓存未命中，调用高德API，并将标准化坐标作为参数传入内部方法
+        log.info("路径缓存未命中，正在调用高德API: {} -> {}", normalizedOrigin, normalizedDestination);
+
+        // 调用 API 时，使用原始/高精度坐标，但传入标准化后的坐标用于缓存存储
+        return callAmapApiAndCache(originCoords, destinationCoords, normalizedOrigin, normalizedDestination);
     }
 
-    private RouteCache callAmapApiAndCache(String originCoords, String destinationCoords) {
+    private RouteCache callAmapApiAndCache(  String originCoords,
+                                             String destinationCoords,
+                                             String normalizedOrigin,
+                                             String normalizedDestination) {
         String url = String.format(
                 "https://restapi.amap.com/v5/direction/driving?key=%s&origin=%s&destination=%s&show_fields=polyline,cost",
                 amapApiKey, originCoords, destinationCoords
@@ -90,8 +97,8 @@ public class RouteServiceImpl implements RouteService {
 
             // 6. 创建新的缓存对象并存入数据库
             RouteCache newRoute = new RouteCache();
-            newRoute.setOriginCoords(originCoords);
-            newRoute.setDestinationCoords(destinationCoords);
+            newRoute.setOriginCoords(normalizedOrigin);
+            newRoute.setDestinationCoords(normalizedDestination);
             // V5版本的distance和duration是字符串，需要转换为Integer
             newRoute.setDistance(Integer.parseInt(firstPath.getDistance()));
             newRoute.setDuration(Integer.parseInt(firstPath.getCost().getDuration()));
@@ -161,15 +168,17 @@ public class RouteServiceImpl implements RouteService {
                 // 3. 格式化坐标并调用RouteService
                 String originCoords = origin.getLng() + "," + origin.getLat();
                 String destCoords = dest.getLng() + "," + dest.getLat();
+                String normalizedOrigin = normalizeCoords(originCoords);
+                String normalizedDest = normalizeCoords(destCoords);
 
                 // 使用不延时版本的getRoute
-                RouteCache cachedRoute = routeCacheMapper.findByOriginAndDestination(originCoords, destCoords);
+                RouteCache cachedRoute = routeCacheMapper.findByOriginAndDestination(normalizedOrigin, normalizedDest);
                 if (cachedRoute != null) {
-                    log.info("路径缓存命中: {} -> {}", originCoords, destCoords);
+                    log.info("路径缓存命中: {} -> {}", normalizedOrigin, normalizedDest);
                 } else {
                     // 缓存未命中，调用高德API并延时
-                    log.info("路径缓存未命中，正在调用高德API: {} -> {}", originCoords, destCoords);
-                    callAmapApiAndCache(originCoords, destCoords);
+                    log.info("路径缓存未命中，正在调用高德API: {} -> {}", normalizedOrigin, normalizedDest);
+                    callAmapApiAndCache(originCoords, destCoords, normalizedOrigin, normalizedDest);
 
                     // 强制延时，保护API的QPS（仅在调用API时延时）
                     try {
@@ -188,5 +197,28 @@ public class RouteServiceImpl implements RouteService {
             }
         }
         log.info("--- 阶段 [{} -> {}] 处理完成 ---", stage.getOriginPoiType(), stage.getDestinationPoiType());
+    }
+    /**
+     * 统一标准化经纬度字符串，用于确保缓存键的一致性。
+     * @param coords 原始坐标字符串，格式为 "lng,lat"
+     * @return 格式化后的坐标字符串，如 "117.183943,34.344782" (统一为小数点后6位)
+     */
+    @Override
+    public String normalizeCoords(String coords) {
+        if (coords == null) return null;
+
+        // 假设输入格式为 "lng,lat"
+        String[] parts = coords.split(",");
+        if (parts.length != 2) return coords; // 格式不正确则返回原值
+
+        try {
+            double lng = Double.parseDouble(parts[0]);
+            double lat = Double.parseDouble(parts[1]);
+
+            return String.format("%.6f,%.6f", lng, lat);
+        } catch (NumberFormatException e) {
+            log.error("坐标格式化失败: {}", coords);
+            return coords;
+        }
     }
 }

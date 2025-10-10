@@ -19,6 +19,8 @@ public class Vehicle {
     private String currentLat;
     private Long currentDemandId;
     private LocalDateTime lastUpdateTime;
+    private Double speed;
+    private  Integer lastReachedPathIndex;
 
     // --- 以下为仿真运行时，仅在内存中使用的字段 ---
 
@@ -53,5 +55,8 @@ public class Vehicle {
      * [Transient] 开始当前行为（如移动、装货）的仿真时间点（秒）
      */
     private transient long actionStartTime;
+
+
+
 }
 
