@@ -9,9 +9,9 @@ spring:
   datasource:
     # 数据库配置，留空或使用占位符，以便其他开发者知道需要配置哪些字段
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://119.29.20.235/dispatch
+    url: jdbc:mysql://xxx.xxx.xxx.xxx/dispatch
     username: root
-    password: xymgym041232@GYM
+    password: 123456
 
 mybatis:
   configuration:
@@ -36,7 +36,3 @@ knife4j:
   setting:
     language: zh_cn
 
-
-api:
-  key:
-    3dbb916f37c6fae92c4a8f7fcd35c5aa

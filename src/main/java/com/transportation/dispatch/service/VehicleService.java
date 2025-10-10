@@ -19,4 +19,5 @@ public interface VehicleService {
      * 更新所有车辆的当前实时状态。
      */
     void updateAllVehiclesState(long simulationTime, int timeStep);
+    void updateVehicleSpeed(Long vehicleId, double speed);
 }
