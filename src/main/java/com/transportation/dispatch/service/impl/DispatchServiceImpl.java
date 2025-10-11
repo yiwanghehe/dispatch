@@ -8,6 +8,7 @@ import com.transportation.dispatch.model.entity.TransportDemand;
 import com.transportation.dispatch.model.entity.Vehicle;
 import com.transportation.dispatch.model.entity.VehicleType;
 import com.transportation.dispatch.service.DispatchService;
+import com.transportation.dispatch.service.VehicleService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,8 @@ public class DispatchServiceImpl implements DispatchService {
     private TransportDemandMapper transportDemandMapper;
     @Autowired
     private VehicleMapper vehicleMapper;
+    @Autowired
+    private VehicleService vehicleService;
 
     /**
      * 调度主方法：为所有待处理的任务分配车辆（无干预策略）
@@ -45,7 +48,7 @@ public class DispatchServiceImpl implements DispatchService {
         log.info("开始调度... 待处理任务: {}个, 空闲车辆: {}辆", pendingDemands.size(), idleVehicles.size());
 
         for (TransportDemand demand : pendingDemands) {
-            // 寻找一辆能满足此任务的空闲车辆
+
             for (Vehicle vehicle : idleVehicles) {
                 VehicleType type = vehicleTypeMap.get(vehicle.getTypeId());
                 if (type == null) continue;

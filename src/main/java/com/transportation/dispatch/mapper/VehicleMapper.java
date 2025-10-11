@@ -37,6 +37,8 @@ public interface VehicleMapper {
      * 【新增】更新车辆的状态和位置信息
      */
     @Update("UPDATE vehicle SET status = #{status}, current_lng = #{currentLng}, current_lat = #{currentLat}, " +
-            "current_demand_id = #{currentDemandId}, last_update_time = NOW() ,  speed=#{speed} , last_reached_path_index=#{lastReachedPathIndex} WHERE id = #{id}")
+            "current_demand_id = #{currentDemandId}, last_update_time = NOW() ,  speed=#{speed} ,total_shipping_weight=#{totalShippingWeight},total_shipping_volume=#{totalShippingVolume}, last_reached_path_index=#{lastReachedPathIndex} WHERE id = #{id}")
     void update(Vehicle vehicle);
+    @Select("SELECT max_load_weight FROM vehicle_type WHERE id = #{id}")
+    Double findMaxLoad(@Param("id") Long id);
 }

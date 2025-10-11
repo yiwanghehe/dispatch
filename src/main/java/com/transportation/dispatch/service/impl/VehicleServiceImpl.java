@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,9 +40,9 @@ public class VehicleServiceImpl implements VehicleService {
 
     private static final long LOADING_DURATION_SECONDS = 5 * 60; // 5分钟
     private static final long UNLOADING_DURATION_SECONDS = 5 * 60; // 5分钟
-
+    private static final long  timeStepSeconds = 60;
     @Override
-    public List<VehicleDto> getVehicles(VehicleStatus status) {
+    public List<VehicleDto> getVehicles(VehicleStatus  status) {
         // 此方法逻辑保持不变，继续为前端提供数据
         List<Vehicle> vehicles= runtimeVehicleCache.values().stream()
                 .filter(v -> status == null || v.getStatus() == status)
@@ -102,10 +103,13 @@ public class VehicleServiceImpl implements VehicleService {
                     dto.setNoLoadDuration(v.getNoLoadDuration());
                     dto.setLoadDistance(v.getLoadDistance());
                     dto.setLoadDuration(v.getLoadDuration());
+                    dto.setTotalShippingWeight(v.getTotalShippingWeight().doubleValue());
+                    dto.setTotalShippingVolume(v.getTotalShippingVolume().doubleValue());
+                    dto.setWaitingDuration(v.getWaitingDuration());
+                    dto.setWastedLoad(v.getWastedLoad());
                     return dto;
                 }).collect(Collectors.toList());
     }
-
 
     @Override
     public void updateAllVehiclesState(long simulationTime, int timeStep) {
@@ -136,7 +140,8 @@ public class VehicleServiceImpl implements VehicleService {
                         "noLoadDistance",
                         "noLoadDuration",
                         "loadDistance",
-                        "loadDuration"
+                        "loadDuration",
+                        "wastedLoad"
                 };
 
                 org.springframework.beans.BeanUtils.copyProperties(
@@ -175,11 +180,6 @@ public class VehicleServiceImpl implements VehicleService {
 
 
         }
-
-        // 5. 【新增】清理不再需要的 IDLE 车辆对象，减少内存占用
-        runtimeVehicleCache.entrySet().removeIf(entry ->
-                entry.getValue().getStatus() == VehicleStatus.IDLE
-        );
     }
 
     @Override
@@ -191,13 +191,12 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     private void updateMovingVehiclePosition(Vehicle vehicle, long simulationTime) {
-        if (vehicle.getRoutePolyline() == null) {
+        if (vehicle.getParsedPolyline() == null) {
             initializeVehicleRoute(vehicle, simulationTime);
-
             if (vehicle.getParsedPolyline() == null)
                 return;
         }
-        long timeStepSeconds = 60;
+
         double distanceTraveledInThisStep = vehicle.getSpeed() * timeStepSeconds;
         boolean reachedDestination = updateTraveledPathAndPositionByDistance(
                 vehicle,
@@ -238,8 +237,10 @@ public class VehicleServiceImpl implements VehicleService {
     private void updateLoadingVehicle(Vehicle vehicle, long simulationTime) {
         if (simulationTime - vehicle.getActionStartTime() >= LOADING_DURATION_SECONDS) {
             vehicle.setStatus(VehicleStatus.IN_TRANSIT);
-            vehicle.setWaitingDuration(300);
-            initializeVehicleRoute(vehicle, simulationTime);
+           vehicle.setWaitingDuration(vehicle.getWaitingDuration()+UNLOADING_DURATION_SECONDS);
+           TransportDemand demand = transportDemandMapper.findByIds(List.of(vehicle.getCurrentDemandId())).get(0);
+           vehicle.setWastedLoad(vehicle.getWastedLoad()+vehicleMapper.findMaxLoad(vehicle.getTypeId())-demand.getCargoWeight().doubleValue());
+           initializeVehicleRoute(vehicle, simulationTime);
             log.info("车辆 #{} 装货完成，开始前往目的地。", vehicle.getId());
             vehicleMapper.update(vehicle);
         }
@@ -251,10 +252,23 @@ public class VehicleServiceImpl implements VehicleService {
             demand.setStatus(DemandStatus.COMPLETED);
             demand.setCompletionTime(LocalDateTime.now());
             transportDemandMapper.update(demand);
-            log.info("车辆 #{} 卸货完成，任务 #{} 结束，车辆变为空闲。", vehicle.getId(), demand.getId());
-            vehicle.setWaitingDuration(300);
-            vehicle.setTotalShippingVolume(demand.getCargoVolume());
-            vehicle.setTotalShippingWeight(demand.getCargoWeight());
+            vehicle.setWaitingDuration(vehicle.getWaitingDuration()+UNLOADING_DURATION_SECONDS);
+            BigDecimal currentTotalVolume = (vehicle.getTotalShippingVolume() != null)
+                    ? vehicle.getTotalShippingVolume()
+                    : BigDecimal.ZERO;
+            BigDecimal cargoVolume = (demand.getCargoVolume() != null)
+                    ? demand.getCargoVolume()
+                    : BigDecimal.ZERO;
+            vehicle.setTotalShippingVolume(currentTotalVolume.add(cargoVolume));
+
+            BigDecimal currentTotalWeight = (vehicle.getTotalShippingWeight() != null)
+                    ? vehicle.getTotalShippingWeight()
+                    : BigDecimal.ZERO;
+            BigDecimal cargoWeight = (demand.getCargoWeight() != null)
+                    ? demand.getCargoWeight()
+                    : BigDecimal.ZERO;
+            vehicle.setTotalShippingWeight(currentTotalWeight.add(cargoWeight));
+            log.info("车辆 #{} 卸货完成，任务 #{} 结束，车辆变为空闲。车辆卸载 {}", vehicle.getId(), demand.getId(),vehicle.getTotalShippingWeight());
             vehicle.setStatus(VehicleStatus.IDLE);
             vehicle.setCurrentDemandId(null);
             vehicle.setRoutePolyline(null);
@@ -267,7 +281,7 @@ public class VehicleServiceImpl implements VehicleService {
         }
     }
     private void updateIDle(Vehicle vehicle,long simulationTime) {
-        vehicle.setWaitingDuration(60);
+        vehicle.setWaitingDuration(vehicle.getWaitingDuration()+60);
         Random random = new Random();
           int roll = random.nextInt(100);
         if (roll < 10) {
@@ -284,7 +298,6 @@ public class VehicleServiceImpl implements VehicleService {
 
             vehicle.setActionStartTime(simulationTime);
 
-            vehicle.setWaitingDuration(0);
 
             log.warn("🚨 车辆 #{} 在 IDLE 状态下触发随机事件，状态切换为：{}",
                     vehicle.getId(), nextStatus);
@@ -354,7 +367,7 @@ public class VehicleServiceImpl implements VehicleService {
     }
     private void updateSpecialCase(Vehicle vehicle, long simulationTime) {
         if (simulationTime - vehicle.getActionStartTime() >= UNLOADING_DURATION_SECONDS) {
-
+            
             log.info("车辆 #{} 维修完成 (已耗时 {} 秒)，状态恢复为 IDLE。",
                     vehicle.getId(),
                     simulationTime - vehicle.getActionStartTime());
@@ -363,10 +376,9 @@ public class VehicleServiceImpl implements VehicleService {
             vehicle.setCurrentDemandId(null);
             vehicle.setRoutePolyline(null);
             vehicle.setParsedPolyline(null);
-            vehicle.setTraveledPolyline(null);
             vehicle.setSpeed(0.0);
             vehicle.setLastReachedPathIndex(null);
-            vehicle.setWaitingDuration(500);
+            vehicle.setWaitingDuration(UNLOADING_DURATION_SECONDS+vehicle.getWaitingDuration());
 
             vehicleMapper.update(vehicle);
 
@@ -464,11 +476,11 @@ public class VehicleServiceImpl implements VehicleService {
         }
         if (vehicle.getStatus()==VehicleStatus.MOVING_TO_PICKUP)
         {
-            vehicle.setNoLoadDistance(vehicle.getNoLoadDistance()+600);
+            vehicle.setNoLoadDistance(vehicle.getNoLoadDistance()+vehicle.getSpeed()*60);
             vehicle.setNoLoadDuration(vehicle.getNoLoadDuration()+60);
         }
         else {
-            vehicle.setLoadDistance(vehicle.getLoadDistance()+600);
+            vehicle.setLoadDistance(vehicle.getLoadDistance()+vehicle.getSpeed()*60);
             vehicle.setLoadDuration(vehicle.getLoadDuration()+60);
         }
 

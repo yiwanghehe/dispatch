@@ -22,6 +22,8 @@ public class Vehicle {
     private LocalDateTime lastUpdateTime;
     private Double speed;
     private  Integer lastReachedPathIndex;
+    private  BigDecimal totalShippingWeight;
+    private BigDecimal  totalShippingVolume;
 
     // --- 以下为仿真运行时，仅在内存中使用的字段 ---
 
@@ -61,8 +63,8 @@ public class Vehicle {
     private transient double  noLoadDuration;
     private transient double  loadDistance;
     private transient double loadDuration;
-    private transient BigDecimal totalShippingWeight;
-    private transient BigDecimal  totalShippingVolume;
+
     private transient double  waitingDuration;
+    private transient double  wastedLoad;
 }
 
