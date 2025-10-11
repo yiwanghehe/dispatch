@@ -10,5 +10,5 @@ public enum VehicleStatus {
     IN_TRANSIT,         // 满载运输中，前往卸货点
     UNLOADING,          // 正在卸货
     MAINTENANCE,        // 维护保养中，不可用
-    OFFLINE             // 离线/收工
+    REFUSED             // 离线/收工
 }

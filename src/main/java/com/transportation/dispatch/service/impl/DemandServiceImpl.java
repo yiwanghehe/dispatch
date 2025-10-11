@@ -10,6 +10,7 @@ import com.transportation.dispatch.model.entity.SupplyChainStage;
 import com.transportation.dispatch.model.entity.SupplyChainTemplate;
 import com.transportation.dispatch.model.entity.TransportDemand;
 import com.transportation.dispatch.service.DemandService;
+import com.transportation.dispatch.service.VehicleService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class DemandServiceImpl implements DemandService {
     private PoiMapper poiMapper;
     @Autowired
     private TransportDemandMapper transportDemandMapper;
+
 
     private final Random random = new Random();
 
