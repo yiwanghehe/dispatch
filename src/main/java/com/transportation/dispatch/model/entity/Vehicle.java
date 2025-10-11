@@ -4,6 +4,7 @@ import com.transportation.dispatch.enumeration.VehicleStatus;
 import lombok.Data;
 import lombok.ToString;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -56,7 +57,12 @@ public class Vehicle {
      */
     private transient long actionStartTime;
 
-
-
+    private transient double noLoadDistance;
+    private transient double  noLoadDuration;
+    private transient double  loadDistance;
+    private transient double loadDuration;
+    private transient BigDecimal totalShippingWeight;
+    private transient BigDecimal  totalShippingVolume;
+    private transient double  waitingDuration;
 }
 

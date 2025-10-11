@@ -4,6 +4,7 @@ import com.transportation.dispatch.enumeration.VehicleStatus;
 import lombok.Data;
 
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 @Data
 public class VehicleDto {
@@ -16,6 +17,8 @@ public class VehicleDto {
     private String currentLat;
     private Long currentDemandId;
     private LocalDateTime lastUpdateTime;
+
+
 
 
     /**
@@ -34,5 +37,11 @@ public class VehicleDto {
     /**
      * [Transient] 开始当前行为（如移动、装货）的仿真时间点（秒）
      */
-    private transient long actionStartTime;
+    private transient double noLoadDistance;
+    private transient double  noLoadDuration;
+    private transient double  loadDistance;
+    private transient double loadDuration;
+    private transient BigDecimal totalShippingWeight;
+    private transient BigDecimal  totalShippingVolume;
+    private transient double  waitingDuration;
 }
