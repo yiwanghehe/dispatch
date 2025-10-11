@@ -18,20 +18,16 @@ public class VehicleDto {
     private Long currentDemandId;
     private LocalDateTime lastUpdateTime;
 
-
-
-
     /**
      * [NEW - Transient] 当前车辆已经过的路径的所有坐标点 ("lng,lat;lng,lat;...")
      * 返回给前端，用于绘制车辆尾迹。
      */
     private transient String traveledPolyline;
 
-    private transient int routeDistance;
-
     /**
-     * [Transient] 当前路径的总预估时间（秒）
+     * [Transient] 当前路径的总预估距离和时间（秒）
      */
+    private transient int routeDistance;
     private transient int routeDuration;
 
     /**
