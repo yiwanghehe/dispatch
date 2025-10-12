@@ -107,6 +107,9 @@ public class VehicleServiceImpl implements VehicleService {
                     dto.setTotalShippingVolume(v.getTotalShippingVolume().doubleValue());
                     dto.setWaitingDuration(v.getWaitingDuration());
                     dto.setWastedLoad(v.getWastedLoad());
+                    if(v.getCurrentDemandId() != null&&v.getStatus()==VehicleStatus.IN_TRANSIT)
+                    dto.setCurrentLoad(transportDemandMapper.findCargoWeightById(v.getCurrentDemandId()).doubleValue());
+                    dto.setMaxLoadWeight(vehicleMapper.findMaxLoad(v.getTypeId()));
                     return dto;
                 }).collect(Collectors.toList());
     }
@@ -356,7 +359,14 @@ public class VehicleServiceImpl implements VehicleService {
                 vehicle.setRouteDistance(route.getDistance());
                 vehicle.setRouteDuration(route.getDuration());
                 vehicle.setActionStartTime(simulationTime);
-                vehicle.setTraveledPolyline(originCoords); // 初始化已行驶轨迹为起点
+                if (vehicle.getLastReachedPathIndex()!= null)
+                {
+                    String rawOrigin = vehicle.getCurrentLng() + "," + vehicle.getCurrentLat();
+                    rawOrigin = routeService.normalizeCoords(rawOrigin);
+                    vehicle.setTraveledPolyline(rawOrigin);
+                }
+                else  vehicle.setTraveledPolyline(originCoords); // 初始化已行驶轨迹为起点
+
                 vehicle.setSpeed(10.0);
                 vehicleMapper.update(vehicle);
                 log.info("车辆 #{} 初始化路径 ({} -> {}) 成功，总距离 {}，总时长 {}", vehicle.getId(), originCoords, destCoords, route.getDistance(), route.getDuration());
@@ -404,7 +414,7 @@ public class VehicleServiceImpl implements VehicleService {
 
 
         // 1. 获取起点索引 (基于上一次移动的结果)
-        // 如果是第一次移动，它会是 null 或 0
+
         int startIndex = (vehicle.getLastReachedPathIndex() == null || vehicle.getLastReachedPathIndex() < 0)
                 ? 0
                 : vehicle.getLastReachedPathIndex();
@@ -461,9 +471,7 @@ public class VehicleServiceImpl implements VehicleService {
                 currentLng = currentLng + (endLng - currentLng) * ratio;
                 currentLat = currentLat + (endLat - currentLat) * ratio;
                 newTraveledPolyline.append(";").append(endPointStr[0]).append(",").append(endPointStr[1]);
-
-
-                break; // 跳出循环
+                break; 
             }
         }
 
