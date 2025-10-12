@@ -44,6 +44,7 @@ public interface TransportDemandMapper {
     @Update("UPDATE transport_demand SET status = #{status}, assigned_vehicle_id = #{assignedVehicleId}, assignment_time = #{assignmentTime}, " +
             "pickup_time = #{pickupTime}, completion_time = #{completionTime} WHERE id = #{id}")
     void update(TransportDemand demand);
+
     @Select("SELECT cargo_weight FROM transport_demand WHERE id=#{id}")
     BigDecimal findCargoWeightById(Long id);
 }

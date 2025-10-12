@@ -40,11 +40,12 @@ public class VehicleServiceImpl implements VehicleService {
 
     private static final long LOADING_DURATION_SECONDS = 5 * 60; // 5分钟
     private static final long UNLOADING_DURATION_SECONDS = 5 * 60; // 5分钟
-    private static final long  timeStepSeconds = 60;
+    private static final long timeStepSeconds = 60;
+
     @Override
-    public List<VehicleDto> getVehicles(VehicleStatus  status) {
+    public List<VehicleDto> getVehicles(VehicleStatus status) {
         // 此方法逻辑保持不变，继续为前端提供数据
-        List<Vehicle> vehicles= runtimeVehicleCache.values().stream()
+        List<Vehicle> vehicles = runtimeVehicleCache.values().stream()
                 .filter(v -> status == null || v.getStatus() == status)
                 .collect(Collectors.toList());
 
@@ -54,7 +55,7 @@ public class VehicleServiceImpl implements VehicleService {
                     .filter(Objects::nonNull)
                     .distinct()
                     .collect(Collectors.toList());
-            if(!demandIds.isEmpty()) {
+            if (!demandIds.isEmpty()) {
                 Map<Long, TransportDemand> demandMap = transportDemandMapper.findByIds(demandIds)
                         .stream().collect(Collectors.toMap(TransportDemand::getId, d -> d));
                 for (Vehicle vehicle : vehicles) {
@@ -84,7 +85,7 @@ public class VehicleServiceImpl implements VehicleService {
                 }
             }
         }
-        return  vehicles.stream()
+        return vehicles.stream()
                 .map(v -> {
                     VehicleDto dto = new VehicleDto();
                     dto.setId(v.getId());
@@ -107,8 +108,11 @@ public class VehicleServiceImpl implements VehicleService {
                     dto.setTotalShippingVolume(v.getTotalShippingVolume().doubleValue());
                     dto.setWaitingDuration(v.getWaitingDuration());
                     dto.setWastedLoad(v.getWastedLoad());
-                    if(v.getCurrentDemandId() != null&&v.getStatus()==VehicleStatus.IN_TRANSIT)
-                    dto.setCurrentLoad(transportDemandMapper.findCargoWeightById(v.getCurrentDemandId()).doubleValue());
+
+                    if (v.getCurrentDemandId() != null && v.getStatus() == VehicleStatus.IN_TRANSIT) {
+                        dto.setCurrentLoad(transportDemandMapper.findCargoWeightById(v.getCurrentDemandId()).doubleValue());
+                    }
+
                     dto.setMaxLoadWeight(vehicleMapper.findMaxLoad(v.getTypeId()));
                     return dto;
                 }).collect(Collectors.toList());
@@ -177,7 +181,7 @@ public class VehicleServiceImpl implements VehicleService {
                     updateSpecialCase(vehicle, simulationTime);
                     break;
                 default:
-                    updateIDle(vehicle,simulationTime);
+                    updateIDle(vehicle, simulationTime);
                     break;
             }
 
@@ -240,10 +244,10 @@ public class VehicleServiceImpl implements VehicleService {
     private void updateLoadingVehicle(Vehicle vehicle, long simulationTime) {
         if (simulationTime - vehicle.getActionStartTime() >= LOADING_DURATION_SECONDS) {
             vehicle.setStatus(VehicleStatus.IN_TRANSIT);
-           vehicle.setWaitingDuration(vehicle.getWaitingDuration()+UNLOADING_DURATION_SECONDS);
-           TransportDemand demand = transportDemandMapper.findByIds(List.of(vehicle.getCurrentDemandId())).get(0);
-           vehicle.setWastedLoad(vehicle.getWastedLoad()+vehicleMapper.findMaxLoad(vehicle.getTypeId())-demand.getCargoWeight().doubleValue());
-           initializeVehicleRoute(vehicle, simulationTime);
+            vehicle.setWaitingDuration(vehicle.getWaitingDuration() + UNLOADING_DURATION_SECONDS);
+            TransportDemand demand = transportDemandMapper.findByIds(List.of(vehicle.getCurrentDemandId())).get(0);
+            vehicle.setWastedLoad(vehicle.getWastedLoad() + vehicleMapper.findMaxLoad(vehicle.getTypeId()) - demand.getCargoWeight().doubleValue());
+            initializeVehicleRoute(vehicle, simulationTime);
             log.info("车辆 #{} 装货完成，开始前往目的地。", vehicle.getId());
             vehicleMapper.update(vehicle);
         }
@@ -255,7 +259,7 @@ public class VehicleServiceImpl implements VehicleService {
             demand.setStatus(DemandStatus.COMPLETED);
             demand.setCompletionTime(LocalDateTime.now());
             transportDemandMapper.update(demand);
-            vehicle.setWaitingDuration(vehicle.getWaitingDuration()+UNLOADING_DURATION_SECONDS);
+            vehicle.setWaitingDuration(vehicle.getWaitingDuration() + UNLOADING_DURATION_SECONDS);
             BigDecimal currentTotalVolume = (vehicle.getTotalShippingVolume() != null)
                     ? vehicle.getTotalShippingVolume()
                     : BigDecimal.ZERO;
@@ -271,7 +275,7 @@ public class VehicleServiceImpl implements VehicleService {
                     ? demand.getCargoWeight()
                     : BigDecimal.ZERO;
             vehicle.setTotalShippingWeight(currentTotalWeight.add(cargoWeight));
-            log.info("车辆 #{} 卸货完成，任务 #{} 结束，车辆变为空闲。车辆卸载 {}", vehicle.getId(), demand.getId(),vehicle.getTotalShippingWeight());
+            log.info("车辆 #{} 卸货完成，任务 #{} 结束，车辆变为空闲。车辆卸载 {}", vehicle.getId(), demand.getId(), vehicle.getTotalShippingWeight());
             vehicle.setStatus(VehicleStatus.IDLE);
             vehicle.setCurrentDemandId(null);
             vehicle.setRoutePolyline(null);
@@ -283,18 +287,18 @@ public class VehicleServiceImpl implements VehicleService {
             demandService.triggerNextDemand(demand);
         }
     }
-    private void updateIDle(Vehicle vehicle,long simulationTime) {
-        vehicle.setWaitingDuration(vehicle.getWaitingDuration()+60);
+
+    private void updateIDle(Vehicle vehicle, long simulationTime) {
+        vehicle.setWaitingDuration(vehicle.getWaitingDuration() + 60);
         Random random = new Random();
-          int roll = random.nextInt(100);
+        int roll = random.nextInt(100);
         if (roll < 10) {
 
             VehicleStatus nextStatus;
             if (roll >= 5) {
                 nextStatus = VehicleStatus.REFUSED;
 
-            }
-            else {
+            } else {
                 nextStatus = VehicleStatus.MAINTENANCE;
             }
             vehicle.setStatus(nextStatus);
@@ -359,13 +363,11 @@ public class VehicleServiceImpl implements VehicleService {
                 vehicle.setRouteDistance(route.getDistance());
                 vehicle.setRouteDuration(route.getDuration());
                 vehicle.setActionStartTime(simulationTime);
-                if (vehicle.getLastReachedPathIndex()!= null)
-                {
+                if (vehicle.getLastReachedPathIndex() != null) {
                     String rawOrigin = vehicle.getCurrentLng() + "," + vehicle.getCurrentLat();
                     rawOrigin = routeService.normalizeCoords(rawOrigin);
                     vehicle.setTraveledPolyline(rawOrigin);
-                }
-                else  vehicle.setTraveledPolyline(originCoords); // 初始化已行驶轨迹为起点
+                } else vehicle.setTraveledPolyline(originCoords); // 初始化已行驶轨迹为起点
 
                 vehicle.setSpeed(10.0);
                 vehicleMapper.update(vehicle);
@@ -375,9 +377,10 @@ public class VehicleServiceImpl implements VehicleService {
             }
         }
     }
+
     private void updateSpecialCase(Vehicle vehicle, long simulationTime) {
         if (simulationTime - vehicle.getActionStartTime() >= UNLOADING_DURATION_SECONDS) {
-            
+
             log.info("车辆 #{} 维修完成 (已耗时 {} 秒)，状态恢复为 IDLE。",
                     vehicle.getId(),
                     simulationTime - vehicle.getActionStartTime());
@@ -388,7 +391,7 @@ public class VehicleServiceImpl implements VehicleService {
             vehicle.setParsedPolyline(null);
             vehicle.setSpeed(0.0);
             vehicle.setLastReachedPathIndex(null);
-            vehicle.setWaitingDuration(UNLOADING_DURATION_SECONDS+vehicle.getWaitingDuration());
+            vehicle.setWaitingDuration(UNLOADING_DURATION_SECONDS + vehicle.getWaitingDuration());
 
             vehicleMapper.update(vehicle);
 
@@ -404,8 +407,8 @@ public class VehicleServiceImpl implements VehicleService {
      */
     /**
      * 根据车辆在当前Tick内行驶的距离，更新其位置和已行驶轨迹。
-     * @param vehicle 车辆对象
      *
+     * @param vehicle 车辆对象
      * @return boolean 是否到达终点
      */
     private boolean updateTraveledPathAndPositionByDistance(Vehicle vehicle, double distanceToCover) {
@@ -471,7 +474,7 @@ public class VehicleServiceImpl implements VehicleService {
                 currentLng = currentLng + (endLng - currentLng) * ratio;
                 currentLat = currentLat + (endLat - currentLat) * ratio;
                 newTraveledPolyline.append(";").append(endPointStr[0]).append(",").append(endPointStr[1]);
-                break; 
+                break;
             }
         }
 
@@ -482,20 +485,19 @@ public class VehicleServiceImpl implements VehicleService {
         if (newTraveledPolyline.length() > vehicle.getTraveledPolyline().length()) {
             vehicle.setTraveledPolyline(newTraveledPolyline.toString());
         }
-        if (vehicle.getStatus()==VehicleStatus.MOVING_TO_PICKUP)
-        {
-            vehicle.setNoLoadDistance(vehicle.getNoLoadDistance()+vehicle.getSpeed()*60);
-            vehicle.setNoLoadDuration(vehicle.getNoLoadDuration()+60);
-        }
-        else {
-            vehicle.setLoadDistance(vehicle.getLoadDistance()+vehicle.getSpeed()*60);
-            vehicle.setLoadDuration(vehicle.getLoadDuration()+60);
+        if (vehicle.getStatus() == VehicleStatus.MOVING_TO_PICKUP) {
+            vehicle.setNoLoadDistance(vehicle.getNoLoadDistance() + vehicle.getSpeed() * 60);
+            vehicle.setNoLoadDuration(vehicle.getNoLoadDuration() + 60);
+        } else {
+            vehicle.setLoadDistance(vehicle.getLoadDistance() + vehicle.getSpeed() * 60);
+            vehicle.setLoadDuration(vehicle.getLoadDuration() + 60);
         }
 
 
         vehicleMapper.update(vehicle);
         return false;
     }
+
     private void resetToIdle(Vehicle vehicle) {
         vehicle.setStatus(VehicleStatus.IDLE);
         vehicle.setCurrentDemandId(null);
@@ -576,11 +578,11 @@ public class VehicleServiceImpl implements VehicleService {
             return null;
         }
     }
+
     /**
      * 安全地找到车辆当前坐标在 fullPath 中的索引。
      *
      * @param fullPath 完整的解析路径 (List<String[]>)
-     *
      * @return 匹配的索引，如果找不到则返回 -1
      */
     private int findCurrentPathIndex(List<String[]> fullPath, String currentLngStr, String currentLatStr) {
@@ -622,8 +624,9 @@ public class VehicleServiceImpl implements VehicleService {
      */
     private boolean isEqualWithTolerance(double val1, double val2) {
         // 假设 COORDINATE_TOLERANCE 已定义为 0.000001
-        return Math.abs(val1 - val2) <0.000001;
+        return Math.abs(val1 - val2) < 0.000001;
     }
+
     private boolean isPointEqual(String[] p1, String[] p2) {
         if (p1.length != 2 || p2.length != 2) return false;
         try {
