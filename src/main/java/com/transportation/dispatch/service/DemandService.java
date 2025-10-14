@@ -13,4 +13,7 @@ public interface DemandService {
      * @param completedDemand 已完成的任务
      */
     void triggerNextDemand(TransportDemand completedDemand);
+    int getCompletedDemandCount();
+
+    void deleteAll();
 }

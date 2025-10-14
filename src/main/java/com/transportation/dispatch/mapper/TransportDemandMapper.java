@@ -45,6 +45,15 @@ public interface TransportDemandMapper {
             "pickup_time = #{pickupTime}, completion_time = #{completionTime} WHERE id = #{id}")
     void update(TransportDemand demand);
 
-    @Select("SELECT cargo_weight FROM transport_demand WHERE id=#{id}")
+    @Select("SELECT cargo_weight FROM transport_demand WHERE id = #{id}")
     BigDecimal findCargoWeightById(Long id);
+
+    @Select("SELECT origin_poi_id FROM transport_demand WHERE id = #{id}")
+    Long findOriginPoiIdById(Long id);
+
+    @Select("SELECT destination_poi_id FROM transport_demand WHERE id = #{id}")
+    Long findDestinationPoiIdById(Long id);
+
+    @Delete("TRUNCATE table transport_demand")
+    void deleteAll();
 }

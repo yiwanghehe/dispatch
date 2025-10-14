@@ -2,6 +2,7 @@ package com.transportation.dispatch.service.impl;
 
 import com.transportation.dispatch.enumeration.DemandStatus;
 import com.transportation.dispatch.enumeration.VehicleStatus;
+import com.transportation.dispatch.mapper.PoiMapper;
 import com.transportation.dispatch.mapper.RouteCacheMapper;
 import com.transportation.dispatch.mapper.TransportDemandMapper;
 import com.transportation.dispatch.mapper.VehicleMapper;
@@ -36,16 +37,19 @@ public class VehicleServiceImpl implements VehicleService {
     private DemandService demandService;
     @Autowired
     private RouteService routeService;
+    @Autowired
+    private PoiMapper poiMapper;
+
     private final Map<Long, Vehicle> runtimeVehicleCache = new ConcurrentHashMap<>();
 
     private static final long LOADING_DURATION_SECONDS = 5 * 60; // 5分钟
     private static final long UNLOADING_DURATION_SECONDS = 5 * 60; // 5分钟
-    private static final long timeStepSeconds = 60;
+    private static final long  timeStepSeconds = 60;
 
     @Override
-    public List<VehicleDto> getVehicles(VehicleStatus status) {
+    public List<VehicleDto> getVehicles(VehicleStatus  status) {
         // 此方法逻辑保持不变，继续为前端提供数据
-        List<Vehicle> vehicles = runtimeVehicleCache.values().stream()
+        List<Vehicle> vehicles= runtimeVehicleCache.values().stream()
                 .filter(v -> status == null || v.getStatus() == status)
                 .collect(Collectors.toList());
 
@@ -55,7 +59,7 @@ public class VehicleServiceImpl implements VehicleService {
                     .filter(Objects::nonNull)
                     .distinct()
                     .collect(Collectors.toList());
-            if (!demandIds.isEmpty()) {
+            if(!demandIds.isEmpty()) {
                 Map<Long, TransportDemand> demandMap = transportDemandMapper.findByIds(demandIds)
                         .stream().collect(Collectors.toMap(TransportDemand::getId, d -> d));
                 for (Vehicle vehicle : vehicles) {
@@ -85,7 +89,7 @@ public class VehicleServiceImpl implements VehicleService {
                 }
             }
         }
-        return vehicles.stream()
+        return  vehicles.stream()
                 .map(v -> {
                     VehicleDto dto = new VehicleDto();
                     dto.setId(v.getId());
@@ -95,7 +99,6 @@ public class VehicleServiceImpl implements VehicleService {
                     dto.setCurrentLng(v.getCurrentLng());
                     dto.setCurrentLat(v.getCurrentLat());
 
-                    // 【核心修正】：新增对 traveledPolyline 的赋值
                     dto.setTraveledPolyline(v.getTraveledPolyline());
                     dto.setRouteDistance(v.getRouteDistance());
                     dto.setRouteDuration(v.getRouteDuration());
@@ -108,12 +111,24 @@ public class VehicleServiceImpl implements VehicleService {
                     dto.setTotalShippingVolume(v.getTotalShippingVolume().doubleValue());
                     dto.setWaitingDuration(v.getWaitingDuration());
                     dto.setWastedLoad(v.getWastedLoad());
-
-                    if (v.getCurrentDemandId() != null && v.getStatus() == VehicleStatus.IN_TRANSIT) {
+                    if(v.getCurrentDemandId() != null && v.getStatus() == VehicleStatus.IN_TRANSIT) {
                         dto.setCurrentLoad(transportDemandMapper.findCargoWeightById(v.getCurrentDemandId()).doubleValue());
                     }
-
                     dto.setMaxLoadWeight(vehicleMapper.findMaxLoad(v.getTypeId()));
+
+                    Long originPoiId = null, destinationPoiId = null;
+                    if(v.getCurrentDemandId() != null) {
+                        originPoiId = transportDemandMapper.findOriginPoiIdById(v.getCurrentDemandId());
+                        destinationPoiId = transportDemandMapper.findDestinationPoiIdById(v.getCurrentDemandId());
+                    }
+
+                    if(originPoiId != null) {
+                        dto.setOriginName(poiMapper.findById(originPoiId).getName());
+                    }
+                    if(destinationPoiId != null) {
+                        dto.setDestinationName(poiMapper.findById(destinationPoiId).getName());
+                    }
+
                     return dto;
                 }).collect(Collectors.toList());
     }
@@ -181,7 +196,7 @@ public class VehicleServiceImpl implements VehicleService {
                     updateSpecialCase(vehicle, simulationTime);
                     break;
                 default:
-                    updateIDle(vehicle, simulationTime);
+                    updateIDle(vehicle,simulationTime);
                     break;
             }
 
@@ -244,10 +259,10 @@ public class VehicleServiceImpl implements VehicleService {
     private void updateLoadingVehicle(Vehicle vehicle, long simulationTime) {
         if (simulationTime - vehicle.getActionStartTime() >= LOADING_DURATION_SECONDS) {
             vehicle.setStatus(VehicleStatus.IN_TRANSIT);
-            vehicle.setWaitingDuration(vehicle.getWaitingDuration() + UNLOADING_DURATION_SECONDS);
-            TransportDemand demand = transportDemandMapper.findByIds(List.of(vehicle.getCurrentDemandId())).get(0);
-            vehicle.setWastedLoad(vehicle.getWastedLoad() + vehicleMapper.findMaxLoad(vehicle.getTypeId()) - demand.getCargoWeight().doubleValue());
-            initializeVehicleRoute(vehicle, simulationTime);
+           vehicle.setWaitingDuration(vehicle.getWaitingDuration()+UNLOADING_DURATION_SECONDS);
+           TransportDemand demand = transportDemandMapper.findByIds(List.of(vehicle.getCurrentDemandId())).get(0);
+           vehicle.setWastedLoad(vehicle.getWastedLoad()+vehicleMapper.findMaxLoad(vehicle.getTypeId())-demand.getCargoWeight().doubleValue());
+           initializeVehicleRoute(vehicle, simulationTime);
             log.info("车辆 #{} 装货完成，开始前往目的地。", vehicle.getId());
             vehicleMapper.update(vehicle);
         }
@@ -259,7 +274,7 @@ public class VehicleServiceImpl implements VehicleService {
             demand.setStatus(DemandStatus.COMPLETED);
             demand.setCompletionTime(LocalDateTime.now());
             transportDemandMapper.update(demand);
-            vehicle.setWaitingDuration(vehicle.getWaitingDuration() + UNLOADING_DURATION_SECONDS);
+            vehicle.setWaitingDuration(vehicle.getWaitingDuration()+UNLOADING_DURATION_SECONDS);
             BigDecimal currentTotalVolume = (vehicle.getTotalShippingVolume() != null)
                     ? vehicle.getTotalShippingVolume()
                     : BigDecimal.ZERO;
@@ -275,7 +290,7 @@ public class VehicleServiceImpl implements VehicleService {
                     ? demand.getCargoWeight()
                     : BigDecimal.ZERO;
             vehicle.setTotalShippingWeight(currentTotalWeight.add(cargoWeight));
-            log.info("车辆 #{} 卸货完成，任务 #{} 结束，车辆变为空闲。车辆卸载 {}", vehicle.getId(), demand.getId(), vehicle.getTotalShippingWeight());
+            log.info("车辆 #{} 卸货完成，任务 #{} 结束，车辆变为空闲。车辆卸载 {}", vehicle.getId(), demand.getId(),vehicle.getTotalShippingWeight());
             vehicle.setStatus(VehicleStatus.IDLE);
             vehicle.setCurrentDemandId(null);
             vehicle.setRoutePolyline(null);
@@ -287,18 +302,18 @@ public class VehicleServiceImpl implements VehicleService {
             demandService.triggerNextDemand(demand);
         }
     }
-
-    private void updateIDle(Vehicle vehicle, long simulationTime) {
-        vehicle.setWaitingDuration(vehicle.getWaitingDuration() + 60);
+    private void updateIDle(Vehicle vehicle,long simulationTime) {
+        vehicle.setWaitingDuration(vehicle.getWaitingDuration()+60);
         Random random = new Random();
-        int roll = random.nextInt(100);
+          int roll = random.nextInt(100);
         if (roll < 10) {
 
             VehicleStatus nextStatus;
             if (roll >= 5) {
                 nextStatus = VehicleStatus.REFUSED;
 
-            } else {
+            }
+            else {
                 nextStatus = VehicleStatus.MAINTENANCE;
             }
             vehicle.setStatus(nextStatus);
@@ -337,12 +352,15 @@ public class VehicleServiceImpl implements VehicleService {
 
         if (vehicle.getStatus() == VehicleStatus.MOVING_TO_PICKUP) {
 
-            String rawOrigin = vehicle.getCurrentLng() + "," + vehicle.getCurrentLat();
-            originCoords = routeService.normalizeCoords(rawOrigin);
+                String rawOrigin = vehicle.getCurrentLng() + "," + vehicle.getCurrentLat();
+                originCoords = routeService.normalizeCoords(rawOrigin);
 
-            String rawDest = transportDemandMapper.findPoiCoordsById(demand.getOriginPoiId());
-            destCoords = routeService.normalizeCoords(rawDest);
-            log.info("车辆 #{} 正在前往装货点 {}，当前位置 {}", vehicle.getId(), originCoords, rawOrigin);
+                String rawDest = transportDemandMapper.findPoiCoordsById(demand.getOriginPoiId());
+                destCoords = routeService.normalizeCoords(rawDest);
+                log.info("车辆 #{} 正在前往装货点 {}，当前位置 {}", vehicle.getId(), originCoords, rawOrigin);
+
+
+
 
         } else { // IN_TRANSIT
             // 假设 POI 坐标已标准化或在 RouteService.getRoute 中会被标准化
@@ -359,15 +377,16 @@ public class VehicleServiceImpl implements VehicleService {
             if (route != null) {
                 vehicle.setRoutePolyline(route.getPolyline());
                 vehicle.setParsedPolyline(parsePolyline(route.getPolyline()));
-                System.out.println("parsedPolyline: " + route.getPolyline());
                 vehicle.setRouteDistance(route.getDistance());
                 vehicle.setRouteDuration(route.getDuration());
                 vehicle.setActionStartTime(simulationTime);
-                if (vehicle.getLastReachedPathIndex() != null) {
+                if (vehicle.getLastReachedPathIndex()!= null)
+                {
                     String rawOrigin = vehicle.getCurrentLng() + "," + vehicle.getCurrentLat();
                     rawOrigin = routeService.normalizeCoords(rawOrigin);
                     vehicle.setTraveledPolyline(rawOrigin);
-                } else vehicle.setTraveledPolyline(originCoords); // 初始化已行驶轨迹为起点
+                }
+                else  vehicle.setTraveledPolyline(originCoords); // 初始化已行驶轨迹为起点
 
                 vehicle.setSpeed(10.0);
                 vehicleMapper.update(vehicle);
@@ -377,7 +396,6 @@ public class VehicleServiceImpl implements VehicleService {
             }
         }
     }
-
     private void updateSpecialCase(Vehicle vehicle, long simulationTime) {
         if (simulationTime - vehicle.getActionStartTime() >= UNLOADING_DURATION_SECONDS) {
 
@@ -391,7 +409,7 @@ public class VehicleServiceImpl implements VehicleService {
             vehicle.setParsedPolyline(null);
             vehicle.setSpeed(0.0);
             vehicle.setLastReachedPathIndex(null);
-            vehicle.setWaitingDuration(UNLOADING_DURATION_SECONDS + vehicle.getWaitingDuration());
+            vehicle.setWaitingDuration(UNLOADING_DURATION_SECONDS+vehicle.getWaitingDuration());
 
             vehicleMapper.update(vehicle);
 
@@ -407,8 +425,8 @@ public class VehicleServiceImpl implements VehicleService {
      */
     /**
      * 根据车辆在当前Tick内行驶的距离，更新其位置和已行驶轨迹。
-     *
      * @param vehicle 车辆对象
+     *
      * @return boolean 是否到达终点
      */
     private boolean updateTraveledPathAndPositionByDistance(Vehicle vehicle, double distanceToCover) {
@@ -444,8 +462,6 @@ public class VehicleServiceImpl implements VehicleService {
             // 【容错处理】防止 i == startIndex 且 distanceToNextNode 接近于零的情况
             // 这种情况意味着上一次 Tick 已经将车辆位置精确更新为 fullPath.get(i+1)
             if (distanceToNextNode < 0.1) {
-                // 车辆已在节点 i+1 上，更新 startIndex，继续下一个路段
-                startIndex = i + 1;
                 vehicle.setLastReachedPathIndex(i + 1);
                 continue;
             }
@@ -463,7 +479,6 @@ public class VehicleServiceImpl implements VehicleService {
 
                 newTraveledPolyline.append(";").append(endPointStr[0]).append(",").append(endPointStr[1]);
 
-                // 检查是否到达终点... (逻辑不变)
 
             } else {
                 // 3b. 车辆停在路段 (currentPos -> i+1) 的中间
@@ -473,31 +488,36 @@ public class VehicleServiceImpl implements VehicleService {
 
                 currentLng = currentLng + (endLng - currentLng) * ratio;
                 currentLat = currentLat + (endLat - currentLat) * ratio;
-                newTraveledPolyline.append(";").append(endPointStr[0]).append(",").append(endPointStr[1]);
+                String formattedLng = String.format(Locale.US, "%.6f", currentLng);
+                String formattedLat = String.format(Locale.US, "%.6f",currentLat) ;
+                newTraveledPolyline.append(";").append(formattedLng).append(",").append(formattedLat);
+
                 break;
             }
         }
+        String formattedLng = String.format(Locale.US, "%.6f", currentLng);
+        String formattedLat = String.format(Locale.US, "%.6f",currentLat) ;
 
-
-        vehicle.setCurrentLng(String.valueOf(currentLng));
-        vehicle.setCurrentLat(String.valueOf(currentLat));
+        vehicle.setCurrentLng(formattedLng);
+        vehicle.setCurrentLat(formattedLat);
 
         if (newTraveledPolyline.length() > vehicle.getTraveledPolyline().length()) {
             vehicle.setTraveledPolyline(newTraveledPolyline.toString());
         }
-        if (vehicle.getStatus() == VehicleStatus.MOVING_TO_PICKUP) {
-            vehicle.setNoLoadDistance(vehicle.getNoLoadDistance() + vehicle.getSpeed() * 60);
-            vehicle.setNoLoadDuration(vehicle.getNoLoadDuration() + 60);
-        } else {
-            vehicle.setLoadDistance(vehicle.getLoadDistance() + vehicle.getSpeed() * 60);
-            vehicle.setLoadDuration(vehicle.getLoadDuration() + 60);
+        if (vehicle.getStatus()==VehicleStatus.MOVING_TO_PICKUP)
+        {
+            vehicle.setNoLoadDistance(vehicle.getNoLoadDistance()+vehicle.getSpeed()*60);
+            vehicle.setNoLoadDuration(vehicle.getNoLoadDuration()+60);
+        }
+        else {
+            vehicle.setLoadDistance(vehicle.getLoadDistance()+vehicle.getSpeed()*60);
+            vehicle.setLoadDuration(vehicle.getLoadDuration()+60);
         }
 
 
         vehicleMapper.update(vehicle);
         return false;
     }
-
     private void resetToIdle(Vehicle vehicle) {
         vehicle.setStatus(VehicleStatus.IDLE);
         vehicle.setCurrentDemandId(null);
@@ -579,53 +599,6 @@ public class VehicleServiceImpl implements VehicleService {
         }
     }
 
-    /**
-     * 安全地找到车辆当前坐标在 fullPath 中的索引。
-     *
-     * @param fullPath 完整的解析路径 (List<String[]>)
-     * @return 匹配的索引，如果找不到则返回 -1
-     */
-    private int findCurrentPathIndex(List<String[]> fullPath, String currentLngStr, String currentLatStr) {
-        if (fullPath == null || fullPath.isEmpty()) {
-            log.error("致命错误：fullPath 为空！");
-            return -1;
-        }
-
-        try {
-            // 解析车辆当前的精确位置
-            double currentLng = Double.parseDouble(currentLngStr);
-            double currentLat = Double.parseDouble(currentLatStr);
-
-            // 遍历 fullPath 中的所有坐标点
-            for (int i = 0; i < fullPath.size(); i++) {
-                String[] pathPoint = fullPath.get(i);
-
-                if (pathPoint.length != 2) continue; // 跳过格式不正确的点
-
-                // 解析路径点
-                double pathLng = Double.parseDouble(pathPoint[0]);
-                double pathLat = Double.parseDouble(pathPoint[1]);
-
-                // 【核心修正】：使用容差值进行浮点数比较
-                if (isEqualWithTolerance(pathLng, currentLng) && isEqualWithTolerance(pathLat, currentLat)) {
-                    return i;
-                }
-            }
-        } catch (NumberFormatException e) {
-            log.error("在查找索引时解析坐标字符串失败: {}", e.getMessage());
-            return -1;
-        }
-        log.debug("未找到匹配的坐标点。");
-        return -1;
-    }
-
-    /**
-     * 辅助方法：判断两个 double 值是否在容差范围内相等。
-     */
-    private boolean isEqualWithTolerance(double val1, double val2) {
-        // 假设 COORDINATE_TOLERANCE 已定义为 0.000001
-        return Math.abs(val1 - val2) < 0.000001;
-    }
 
     private boolean isPointEqual(String[] p1, String[] p2) {
         if (p1.length != 2 || p2.length != 2) return false;
@@ -641,6 +614,87 @@ public class VehicleServiceImpl implements VehicleService {
         } catch (NumberFormatException e) {
             return false;
         }
+    }
+    @Override
+    public Double getTotalWastedCapacity() {
+        double totalWastedCapacity = 0.0;
+        for (Vehicle vehicle : runtimeVehicleCache.values()) {
+            totalWastedCapacity += vehicle.getWastedLoad();
+        }
+        return totalWastedCapacity;
+    }
+    @Override
+    public Double getTotalLoadDistance() {
+        double totalLoadDistance = 0.0;
+        for (Vehicle vehicle : runtimeVehicleCache.values()) {
+            totalLoadDistance += vehicle.getLoadDistance();
+        }
+        return totalLoadDistance;
+    }
+    @Override
+    public Double getTotalWaitingDuration() {
+        double totalWaitingDuration = 0.0;
+        for (Vehicle vehicle : runtimeVehicleCache.values()) {
+            totalWaitingDuration += vehicle.getWaitingDuration();
+        }
+        return totalWaitingDuration;
+    }
+    @Override
+    public Double getTotalNoLoadDistance() {
+        double totalNoLoadDistance = 0.0;
+        for (Vehicle vehicle : runtimeVehicleCache.values()) {
+            totalNoLoadDistance += vehicle.getNoLoadDistance();
+        }
+        return totalNoLoadDistance;
+    }
+
+    @Override
+    public Double getTotalDuration() {
+        double totalDuration = 0.0;
+        for (Vehicle vehicle : runtimeVehicleCache.values()) {
+            totalDuration += vehicle.getRouteDuration();
+        }
+        return totalDuration;
+    }
+    @Override
+    public void resetAllVehicles() {
+
+        List<Vehicle> allVehicles = new ArrayList<>(runtimeVehicleCache.values());
+
+        for (Vehicle vehicle : allVehicles) {
+
+            // --- 重置操作 ---
+
+            // 核心状态：回到 IDLE，设置固定初始位置
+            vehicle.setStatus(VehicleStatus.IDLE);
+            vehicle.setOriginLat(vehicle.getCurrentLat());
+            vehicle.setOriginLng(vehicle.getCurrentLng());
+            vehicle.setCurrentLng(vehicle.getCurrentLng()); // 设置固定经度
+            vehicle.setCurrentLat(vehicle.getCurrentLat()); // 设置固定纬度
+            vehicle.setSpeed(0.0);
+            vehicle.setLastUpdateTime(LocalDateTime.now()); // 更新时间
+
+            // 清零所有运行时指标
+            vehicle.setCurrentDemandId(null);
+            vehicle.setRoutePolyline(null);
+            vehicle.setParsedPolyline(null);
+            vehicle.setTraveledPolyline(null);
+            vehicle.setActionStartTime(0);
+            vehicle.setLastReachedPathIndex( null);
+            vehicle.setTotalShippingWeight(BigDecimal.ZERO);
+            vehicle.setTotalShippingVolume(BigDecimal.ZERO);
+            vehicle.setWaitingDuration(0L);
+            vehicle.setNoLoadDistance(0.0);
+            vehicle.setNoLoadDuration(0L);
+            vehicle.setLoadDistance(0.0);
+            vehicle.setLoadDuration(0L);
+            vehicle.setWastedLoad(0.0);
+
+
+            // 2. 更新数据库
+            vehicleMapper.update(vehicle);
+        }
+        log.info("所有 {} 辆车辆已重置并初始化完成。", allVehicles.size());
     }
 }
 

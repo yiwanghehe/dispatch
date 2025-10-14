@@ -21,9 +21,11 @@ public class Vehicle {
     private Long currentDemandId;
     private LocalDateTime lastUpdateTime;
     private Double speed;
-    private Integer lastReachedPathIndex;
-    private BigDecimal totalShippingWeight;
-    private BigDecimal totalShippingVolume;
+    private  Integer lastReachedPathIndex;
+    private  BigDecimal totalShippingWeight;
+    private BigDecimal  totalShippingVolume;
+    private String originLng;
+    private String originLat;
 
     // --- 以下为仿真运行时，仅在内存中使用的字段 ---
 
@@ -60,11 +62,11 @@ public class Vehicle {
     private transient long actionStartTime;
 
     private transient double noLoadDistance;
-    private transient double noLoadDuration;
-    private transient double loadDistance;
+    private transient double  noLoadDuration;
+    private transient double  loadDistance;
     private transient double loadDuration;
 
-    private transient double waitingDuration;
-    private transient double wastedLoad;
+    private transient double  waitingDuration;
+    private transient double  wastedLoad;
 }
 
