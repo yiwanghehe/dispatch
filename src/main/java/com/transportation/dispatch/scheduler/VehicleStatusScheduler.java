@@ -26,7 +26,7 @@ public class VehicleStatusScheduler {
      * 用于向所有订阅的客户端推送最新的车辆状态。
      * 注意：请确保你的主启动类上有 @EnableScheduling 注解。
      */
-    @Scheduled(fixedRate = 2000)
+    @Scheduled(fixedRate = 5000)
     public void pushVehicleUpdates() {
         // 1. 获取所有车辆的最新状态
         List<VehicleDto> allVehicles = vehicleService.getVehicles(null);
