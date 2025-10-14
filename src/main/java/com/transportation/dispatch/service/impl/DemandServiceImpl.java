@@ -36,18 +36,32 @@ public class DemandServiceImpl implements DemandService {
      */
     public void generateDemands() {
         // 假设每个tick有20%的概率生成一个新的供应链任务
-        if (random.nextDouble() < 0.2) {
-            List<SupplyChainTemplate> templates = supplyChainMapper.findAllTemplates();
-            if (templates.isEmpty()) return;
+        if (transportDemandMapper.findByStatus(DemandStatus.PENDING).size()<=40)
+        {
+            if (random.nextDouble() < 0.2)
+            {
+                List<SupplyChainTemplate> templates = supplyChainMapper.findAllTemplates();
+                if (templates.isEmpty()) return;
+                for (int i = 0; i < 10; i++)
+                {
+                    // 随机选择一个供应链模板
+                    SupplyChainTemplate template = templates.get(random.nextInt(templates.size()));
+                    SupplyChainStage firstStage = supplyChainMapper.findStageByTemplateIdAndOrder(template.getId(), 1);
 
-            // 随机选择一个供应链模板
-            SupplyChainTemplate template = templates.get(random.nextInt(templates.size()));
-            SupplyChainStage firstStage = supplyChainMapper.findStageByTemplateIdAndOrder(template.getId(), 1);
+                    if (firstStage != null)
+                    {
+                        createDemandFromStage(firstStage, null);
+                        log.info("成功生成新的运输任务链, 模板: {}", template.getName());
+                    }
+                }
 
-            if (firstStage != null) {
-                createDemandFromStage(firstStage, null);
-                log.info("成功生成新的运输任务链, 模板: {}", template.getName());
-            }
+
+        }
+
+        }
+        else
+        {
+            log.info("当前任务数过多，请等待");
         }
     }
 
@@ -69,6 +83,17 @@ public class DemandServiceImpl implements DemandService {
         }
     }
 
+    @Override
+    public int getCompletedDemandCount() {
+        transportDemandMapper.findByStatus(DemandStatus.COMPLETED);
+        return transportDemandMapper.findByStatus(DemandStatus.COMPLETED).size();
+    }
+
+    @Override
+    public void deleteAll() {
+        transportDemandMapper.deleteAll();
+    }
+
     private void createDemandFromStage(SupplyChainStage stage, Long fixedOriginPoiId) {
         Poi originPoi;
         // 如果上一环节的终点是固定的，就用它作为本环节的起点
@@ -81,22 +106,23 @@ public class DemandServiceImpl implements DemandService {
         Poi destPoi = getRandomPoiByType(stage.getDestinationPoiType());
 
         if (originPoi != null && destPoi != null && !originPoi.getId().equals(destPoi.getId())) {
-            TransportDemand demand = new TransportDemand();
-            demand.setOriginPoiId(originPoi.getId());
-            demand.setDestinationPoiId(destPoi.getId());
-            demand.setCargoName(stage.getCargoName());
-            demand.setCargoWeight(stage.getCargoWeight());
-            demand.setCargoVolume(stage.getCargoVolume());
-            demand.setStatus(DemandStatus.PENDING);
-            demand.setTemplateId(stage.getTemplateId());
-            demand.setStageOrder(stage.getStageOrder());
-            transportDemandMapper.insert(demand);
-        }
+        TransportDemand demand = new TransportDemand();
+        demand.setOriginPoiId(originPoi.getId());
+        demand.setDestinationPoiId(destPoi.getId());
+        demand.setCargoName(stage.getCargoName());
+        demand.setCargoWeight(stage.getCargoWeight());
+        demand.setCargoVolume(stage.getCargoVolume());
+        demand.setStatus(DemandStatus.PENDING);
+        demand.setTemplateId(stage.getTemplateId());
+        demand.setStageOrder(stage.getStageOrder());
+        transportDemandMapper.insert(demand);
     }
+}
 
     private Poi getRandomPoiByType(PoiSimType simType) {
         List<Poi> pois = poiMapper.findBySimType(simType);
         if (pois.isEmpty()) return null;
         return pois.get(random.nextInt(pois.size()));
     }
+
 }

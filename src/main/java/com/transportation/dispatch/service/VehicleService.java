@@ -20,4 +20,14 @@ public interface VehicleService {
      */
     void updateAllVehiclesState(long simulationTime, int timeStep);
     void updateVehicleSpeed(Long vehicleId, double speed);
+    Double getTotalWastedCapacity();
+
+    Double getTotalLoadDistance();
+
+
+    Double getTotalWaitingDuration();
+     Double getTotalNoLoadDistance();
+     Double getTotalDuration();
+
+    void resetAllVehicles();
 }

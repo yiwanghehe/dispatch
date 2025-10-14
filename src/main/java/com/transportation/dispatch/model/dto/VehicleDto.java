@@ -1,6 +1,7 @@
 package com.transportation.dispatch.model.dto;
 
 import com.transportation.dispatch.enumeration.VehicleStatus;
+import lombok.Builder;
 import lombok.Data;
 
 
@@ -8,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
+
 public class VehicleDto {
 
     private Long id; // 车辆id
@@ -46,5 +48,8 @@ public class VehicleDto {
     private transient double noLoadDuration; // 空载时间
     private transient double loadDistance; // 载重里程
     private transient double loadDuration; // 载重时间
+
+    private transient String originName; // 任务起点名
+    private transient String destinationName; // 任务终点名
 
 }

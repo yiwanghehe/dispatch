@@ -24,6 +24,8 @@ public class Vehicle {
     private  Integer lastReachedPathIndex;
     private  BigDecimal totalShippingWeight;
     private BigDecimal  totalShippingVolume;
+    private String originLng;
+    private String originLat;
 
     // --- 以下为仿真运行时，仅在内存中使用的字段 ---
 
