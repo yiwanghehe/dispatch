@@ -518,12 +518,8 @@ public class VehicleServiceImpl implements VehicleService {
 
                 double ratio = remainingDistance / distanceToNextNode;
 
-
                 currentLng = currentLng + (endLng - currentLng) * ratio;
                 currentLat = currentLat + (endLat - currentLat) * ratio;
-                String formattedLng = String.format(Locale.US, "%.6f", currentLng);
-                String formattedLat = String.format(Locale.US, "%.6f",currentLat) ;
-                newTraveledPolyline.append(";").append(formattedLng).append(",").append(formattedLat);
 
                 break;
             }
