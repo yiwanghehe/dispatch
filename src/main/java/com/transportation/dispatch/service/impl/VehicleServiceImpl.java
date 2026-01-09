@@ -1,5 +1,6 @@
 package com.transportation.dispatch.service.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.transportation.dispatch.enumeration.DemandStatus;
 import com.transportation.dispatch.enumeration.VehicleStatus;
 import com.transportation.dispatch.mapper.PoiMapper;
@@ -13,8 +14,10 @@ import com.transportation.dispatch.model.entity.Vehicle;
 import com.transportation.dispatch.service.DemandService;
 import com.transportation.dispatch.service.RouteService;
 import com.transportation.dispatch.service.VehicleService;
+import com.transportation.dispatch.service.WeatherService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -39,6 +42,10 @@ public class VehicleServiceImpl implements VehicleService {
     private RouteService routeService;
     @Autowired
     private PoiMapper poiMapper;
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+    @Autowired
+    private WeatherService weatherService;
 
     private final Map<Long, Vehicle> runtimeVehicleCache = new ConcurrentHashMap<>();
 
@@ -51,7 +58,21 @@ public class VehicleServiceImpl implements VehicleService {
         // 此方法逻辑保持不变，继续为前端提供数据
         List<Vehicle> vehicles= runtimeVehicleCache.values().stream()
                 .filter(v -> status == null || v.getStatus() == status)
-                .collect(Collectors.toList());
+                .toList();
+        vehicles.forEach(v -> {
+            if (v.getStatus().equals(VehicleStatus.MOVING_TO_PICKUP)||v.getStatus().equals(VehicleStatus.IN_TRANSIT))
+            {
+
+                try {
+                    redisTemplate.opsForValue().set("vehicle_lat:" + v.getId(), JSON.toJSONString(v.getCurrentLat()));
+                    redisTemplate.opsForValue().set("vehicle_lng:" + v.getId(), JSON.toJSONString(v.getCurrentLng()));
+                } catch (Exception e) {
+                    // 仅记录警告日志，不要抛出异常，让程序继续运行
+                    log.warn("Redis连接失败，车辆 #{} 状态未写入缓存，将仅使用内存数据。", v.getId());
+                }
+            }
+
+        });
 
         if (vehicles.stream().anyMatch(v -> v.getCurrentDemandId() != null)) {
             List<Long> demandIds = vehicles.stream()
@@ -66,16 +87,13 @@ public class VehicleServiceImpl implements VehicleService {
                     if (vehicle.getCurrentDemandId() != null) {
                         TransportDemand demand = demandMap.get(vehicle.getCurrentDemandId());
                         if (demand != null) {
-                            // POI 坐标也应该标准化，确保和缓存键一致
                             String normalizedOrigin = routeService.normalizeCoords(transportDemandMapper.findPoiCoordsById(demand.getOriginPoiId()));
                             String normalizedDest = routeService.normalizeCoords(transportDemandMapper.findPoiCoordsById(demand.getDestinationPoiId()));
-
                             if (normalizedOrigin != null && normalizedDest != null) {
 
                                 String rawStart = vehicle.getStatus() == VehicleStatus.IN_TRANSIT ? normalizedOrigin : vehicle.getCurrentLng() + "," + vehicle.getCurrentLat();
                                 String routeEnd = vehicle.getStatus() == VehicleStatus.IN_TRANSIT ? normalizedDest : normalizedOrigin;
 
-                                // 【关键修改点】：标准化查询键
                                 String normalizedRouteStart = routeService.normalizeCoords(rawStart);
 
                                 RouteCache route = routeCacheMapper.findByOriginAndDestination(normalizedRouteStart, routeEnd); // routeEnd已经是标准化后的POI坐标
@@ -111,6 +129,7 @@ public class VehicleServiceImpl implements VehicleService {
                     dto.setTotalShippingVolume(v.getTotalShippingVolume().doubleValue());
                     dto.setWaitingDuration(v.getWaitingDuration());
                     dto.setWastedLoad(v.getWastedLoad());
+                    dto.setSpeed(v.getSpeed() != null ? v.getSpeed() : 0.0);
                     if(v.getCurrentDemandId() != null && v.getStatus() == VehicleStatus.IN_TRANSIT) {
                         dto.setCurrentLoad(transportDemandMapper.findCargoWeightById(v.getCurrentDemandId()).doubleValue());
                     }
@@ -129,6 +148,16 @@ public class VehicleServiceImpl implements VehicleService {
                         dto.setDestinationName(poiMapper.findById(destinationPoiId).getName());
                     }
 
+                    // 添加天气相关信息
+                    String location = dto.getCurrentLng() + "," + dto.getCurrentLat();
+                    double speedFactor = weatherService.getSpeedFactorByLocation(location);
+                    String weatherCondition = weatherService.getWeatherByLocation(location).getCondition().name();
+                    double adjustedSpeed = dto.getSpeed() * speedFactor;
+                    
+                    dto.setWeatherCondition(weatherCondition);
+                    dto.setSpeedFactor(speedFactor);
+                    dto.setAdjustedSpeed(adjustedSpeed);
+                    
                     return dto;
                 }).collect(Collectors.toList());
     }
@@ -219,7 +248,12 @@ public class VehicleServiceImpl implements VehicleService {
                 return;
         }
 
-        double distanceTraveledInThisStep = vehicle.getSpeed() * timeStepSeconds;
+        // 根据天气调整速度
+        String location = vehicle.getCurrentLng() + "," + vehicle.getCurrentLat();
+        double speedFactor = weatherService.getSpeedFactorByLocation(location);
+        double adjustedSpeed = vehicle.getSpeed() * speedFactor;
+
+        double distanceTraveledInThisStep = adjustedSpeed * timeStepSeconds;
         boolean reachedDestination = updateTraveledPathAndPositionByDistance(
                 vehicle,
                 distanceTraveledInThisStep
@@ -420,9 +454,7 @@ public class VehicleServiceImpl implements VehicleService {
                     UNLOADING_DURATION_SECONDS);
         }
     }
-    /**
-     * [CORE UPGRADE] 根据行驶进度，更新已行驶轨迹和当前精确位置
-     */
+
     /**
      * 根据车辆在当前Tick内行驶的距离，更新其位置和已行驶轨迹。
      * @param vehicle 车辆对象
@@ -446,7 +478,8 @@ public class VehicleServiceImpl implements VehicleService {
         double currentLat = Double.parseDouble(vehicle.getCurrentLat());
 
         double remainingDistance = distanceToCover;
-        StringBuilder newTraveledPolyline = new StringBuilder(vehicle.getTraveledPolyline());
+       //StringBuilder newTraveledPolyline = new StringBuilder(vehicle.getTraveledPolyline());
+        StringBuilder newTraveledPolyline = new StringBuilder();
 
         // 3. 循环从上一个已知节点 i 开始
         // i 是当前路段的起点节点索引

@@ -6,6 +6,16 @@ spring:
     active: dev
   application:
     name: dispatch
+  data:
+    redis:
+      host: 119.29.20.235
+      port: 6379
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 10
+          min-idle: 1
+          time-between-eviction-runs: 10s
   datasource:
     # 数据库配置，留空或使用占位符，以便其他开发者知道需要配置哪些字段
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -35,4 +45,12 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+
+# 天气服务配置
+weather:
+
+  # 天气数据缓存时间（分钟）
+  cache-duration: 30
+  # 是否启用天气模拟
+  simulate: true
 

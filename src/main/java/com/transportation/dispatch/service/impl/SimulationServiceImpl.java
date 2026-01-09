@@ -55,15 +55,11 @@ public class SimulationServiceImpl implements SimulationService {
         if (isRunning.compareAndSet(false, true)) {
             this.weight2dispatch = weight2Dispatch;
             dispatchExecutor=Executors.newFixedThreadPool(
-                    Runtime.getRuntime().availableProcessors() // 使用可用的处理器核心数
+                    Runtime.getRuntime().availableProcessors()
             );
-
-            // --- 【核心修改：检查并重用沙箱】 ---
-
             SimulationSession sessionToUse = sessionMapper.findLatestUnfinishedSession();
 
             if (sessionToUse != null) {
-                // 情况 1: 发现未完成的沙箱，重用它
                 log.warn("检测到上次仿真（ID: {}）未正常停止，将继续使用该会话。", sessionToUse.getId());
                 this.currentSessionId = sessionToUse.getId();
                 this.startTime = sessionToUse.getStartTime(); // 使用旧的开始时间
@@ -76,7 +72,6 @@ public class SimulationServiceImpl implements SimulationService {
                         sessionToUse.getUseWeight()
                 );
 
-                // 确保名称更新为最终格式（如果之前没有成功命名）
                 String finalSessionName = "数据沙箱 #" + this.currentSessionId;
                 if (!finalSessionName.equals(sessionToUse.getSessionName())) {
                     sessionToUse.setSessionName(finalSessionName);
@@ -92,24 +87,22 @@ public class SimulationServiceImpl implements SimulationService {
                         this.startTime,
                         null,
                         weight2Dispatch.isUseWeight(),
-                        weight2Dispatch.getWEIGHT_TIME(),
-                        weight2Dispatch.getWEIGHT_WASTED_LOAD(),
-                        weight2Dispatch.getWEIGHT_WASTED_IDLE(),
-                        null, null, null, null, null, null, null
+                        weight2Dispatch.getWeightTime(),
+                        weight2Dispatch.getWeightWastedLoad(),
+                        weight2Dispatch.getWeightWastedIdle(),
+                        null, null, null, null, null, null,null
                 );
 
-                sessionMapper.insert(newSession); // MyBatis回填ID
+                sessionMapper.insert(newSession);
                 this.currentSessionId = newSession.getId();
 
-                // 立即更新为最终名称
                 String finalSessionName = "数据沙箱 #" + this.currentSessionId;
                 newSession.setSessionName(finalSessionName);
-                sessionMapper.update(newSession); // 使用专用的名称更新方法
+                sessionMapper.update(newSession);
 
                 log.info("已创建新的仿真会话。会话ID: {}", this.currentSessionId);
             }
 
-            // --- 核心修改结束 ---
             executorService = Executors.newSingleThreadScheduledExecutor();
 
             executorService.scheduleAtFixedRate(this::tick, 0, TICK_INTERVAL_MS, TimeUnit.MILLISECONDS);
@@ -148,9 +141,9 @@ public class SimulationServiceImpl implements SimulationService {
                         // 2. 收集统计数据
                         session.setEndTime(LocalDateTime.now());
                         session.setUseWeight(weight2dispatch.isUseWeight());
-                        session.setWeightTime(weight2dispatch.getWEIGHT_TIME());
-                        session.setWeightWastedLoad(weight2dispatch.getWEIGHT_WASTED_LOAD());
-                        session.setWeightWastedIdle(weight2dispatch.getWEIGHT_WASTED_IDLE());
+                        session.setWeightTime(weight2dispatch.getWeightTime());
+                        session.setWeightWastedLoad(weight2dispatch.getWeightWastedLoad());
+                        session.setWeightWastedIdle(weight2dispatch.getWeightWastedIdle());
                         session.setAvgNoLoadDistance(vehicleService.getTotalNoLoadDistance());
                         session.setAvgLoadDistance(vehicleService.getTotalLoadDistance());
                         session.setAvgTotalDuration(vehicleService.getTotalDuration());
@@ -199,18 +192,12 @@ public class SimulationServiceImpl implements SimulationService {
             demandService.generateDemands();
 
             // 【2. 异步调度分配】
-            // 只有当上一个调度任务没有在运行 (isDone) 且当前有待分配任务时，才提交新的调度任务
-            // 注意：dispatchFuture 在 start() 中初始化为 null
             if (dispatchFuture == null || dispatchFuture.isDone()) {
-
-                // 提交任务的逻辑保持不变 (使用 dispatchExecutor 提交异步任务)
                 Runnable dispatchTask = () -> {
                     try {
                         if (weight2dispatch.isUseWeight()) {
-                            // 调用基于成本的调度
                             dispatchService.dispatchPendingDemandsByCost(weight2dispatch);
                         } else {
-                            // 调用默认调度
                             dispatchService.dispatchPendingDemands();
                         }
                         log.debug("异步调度任务完成。");
@@ -229,7 +216,6 @@ public class SimulationServiceImpl implements SimulationService {
 
 
             // 【3. 状态更新】
-            // 车辆到达终点的逻辑必须在这里同步执行，这是时间步进的核心。
             vehicleService.updateAllVehiclesState(simulationTime, TIME_STEP_SECONDS);
 
         } catch (Exception e) {

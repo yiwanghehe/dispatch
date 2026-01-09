@@ -13,9 +13,11 @@ import com.transportation.dispatch.service.RouteService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -35,10 +37,15 @@ public class RouteServiceImpl implements RouteService {
     @Autowired
     private SupplyChainMapper supplyChainMapper;
 
+    @Autowired
+    private RedisTemplate<String, RouteCache> routeCacheRedisTemplate;
+
     @Value("${api.key}")
     private String amapApiKey;
 
     private static final long API_CALL_DELAY_MS = 360; // 每次API调用后暂停一定毫秒，确保不超过3次/秒的QPS
+    private static final String ROUTE_CACHE_KEY_TEMPLATE = "route:%s:%s";
+    private static final Duration ROUTE_CACHE_TTL = Duration.ofHours(12);
 
     /**
      * 获取两点之间的驾驶路径。
@@ -51,10 +58,19 @@ public class RouteServiceImpl implements RouteService {
     public RouteCache getRoute(String originCoords, String destinationCoords) {
         String normalizedOrigin = normalizeCoords(originCoords);
         String normalizedDestination = normalizeCoords(destinationCoords);
-        // 1. 优先查询数据库缓存
-        RouteCache cachedRoute = routeCacheMapper.findByOriginAndDestination(normalizedOrigin, normalizedDestination);
+
+        // 1. 优先从 Redis 缓存读取
+        RouteCache cachedRoute = getRouteFromRedis(normalizedOrigin, normalizedDestination);
         if (cachedRoute != null) {
-            log.info("路径缓存命中: {} -> {}", normalizedOrigin, normalizedDestination);
+            log.info("Redis 路径缓存命中: {} -> {}", normalizedOrigin, normalizedDestination);
+            return cachedRoute;
+        }
+
+        // 1. 优先查询数据库缓存
+        cachedRoute = routeCacheMapper.findByOriginAndDestination(normalizedOrigin, normalizedDestination);
+        if (cachedRoute != null) {
+            log.info("数据库路径缓存命中: {} -> {}", normalizedOrigin, normalizedDestination);
+            cacheRoute(normalizedOrigin, normalizedDestination, cachedRoute);
             return cachedRoute;
         }
 
@@ -107,6 +123,7 @@ public class RouteServiceImpl implements RouteService {
             routeCacheMapper.insert(newRoute);
             log.info("成功获取新路径并已存入缓存: {} -> {}", originCoords, destinationCoords);
 
+            cacheRoute(normalizedOrigin, normalizedDestination, newRoute);
             return newRoute;
 
         } catch (Exception e) {
@@ -175,6 +192,7 @@ public class RouteServiceImpl implements RouteService {
                 RouteCache cachedRoute = routeCacheMapper.findByOriginAndDestination(normalizedOrigin, normalizedDest);
                 if (cachedRoute != null) {
                     log.info("路径缓存命中: {} -> {}", normalizedOrigin, normalizedDest);
+                    cacheRoute(normalizedOrigin, normalizedDest, cachedRoute);
                 } else {
                     // 缓存未命中，调用高德API并延时
                     log.info("路径缓存未命中，正在调用高德API: {} -> {}", normalizedOrigin, normalizedDest);
@@ -220,5 +238,35 @@ public class RouteServiceImpl implements RouteService {
             log.error("坐标格式化失败: {}", coords);
             return coords;
         }
+    }
+
+    private RouteCache getRouteFromRedis(String normalizedOrigin, String normalizedDestination) {
+        try {
+            String key = buildRouteCacheKey(normalizedOrigin, normalizedDestination);
+            return routeCacheRedisTemplate.opsForValue().get(key);
+        } catch (Exception ex) {
+            log.warn("读取 Redis 缓存失败，回退到数据库: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private void cacheRoute(String normalizedOrigin, String normalizedDestination, RouteCache routeCache) {
+        if (routeCache == null) {
+            return;
+        }
+        try {
+            String key = buildRouteCacheKey(normalizedOrigin, normalizedDestination);
+            if (ROUTE_CACHE_TTL.isZero() || ROUTE_CACHE_TTL.isNegative()) {
+                routeCacheRedisTemplate.opsForValue().set(key, routeCache);
+            } else {
+                routeCacheRedisTemplate.opsForValue().set(key, routeCache, ROUTE_CACHE_TTL);
+            }
+        } catch (Exception ex) {
+            log.warn("写入 Redis 缓存失败，将继续使用数据库: {}", ex.getMessage());
+        }
+    }
+
+    private String buildRouteCacheKey(String normalizedOrigin, String normalizedDestination) {
+        return String.format(ROUTE_CACHE_KEY_TEMPLATE, normalizedOrigin, normalizedDestination);
     }
 }

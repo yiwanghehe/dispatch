@@ -52,4 +52,20 @@ public class VehicleDto {
     private transient String originName; // 任务起点名
     private transient String destinationName; // 任务终点名
 
+    // 天气相关字段
+    private transient String weatherCondition; // 天气状况
+    private transient double speedFactor; // 速度影响系数
+    private transient double adjustedSpeed; // 调整后的速度
+    
+    // 车辆速度
+    private double speed;
+
+    public double getSpeed() {
+        return speed;
+    }
+
+    public void setSpeed(double speed) {
+        this.speed = speed;
+    }
+
 }

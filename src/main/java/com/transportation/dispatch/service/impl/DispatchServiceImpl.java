@@ -103,9 +103,9 @@ public class DispatchServiceImpl implements DispatchService {
         List<AssignmentCandidate> candidates = new ArrayList<>();
 
 
-        final double WEIGHT_TIME = weight2Dispatch.getWEIGHT_TIME();          // 行驶时间权重
-        final double WEIGHT_WASTED_LOAD = weight2Dispatch.getWEIGHT_WASTED_LOAD();   // 浪费载重权重（可能需要标准化）
-        final double WEIGHT_WASTED_IDLE = weight2Dispatch.getWEIGHT_WASTED_IDLE();
+        final double WEIGHT_TIME = weight2Dispatch.getWeightTime();          // 行驶时间权重
+        final double WEIGHT_WASTED_LOAD = weight2Dispatch.getWeightWastedLoad();   // 浪费载重权重（可能需要标准化）
+        final double WEIGHT_WASTED_IDLE = weight2Dispatch.getWeightWastedIdle();
         final double MAX_REF_LOAD = vehicleMapper.findAllTypes().stream()
                 .mapToDouble(type -> type.getMaxLoadWeight().doubleValue())
                 .max().orElse(10000.0);
@@ -115,7 +115,7 @@ public class DispatchServiceImpl implements DispatchService {
 
             for (Vehicle vehicle : idleVehicles) {
                 double distance1 = calculateDistance(vehicle.getCurrentLng(), vehicle.getCurrentLat(),poiMapper.findById(demand.getOriginPoiId()).getLng(),poiMapper.findById(demand.getDestinationPoiId()).getLat());
-                double distance2 = calculateDistance(poiMapper.findById(demand.getOriginPoiId()).getLng(),poiMapper.findById(demand.getDestinationPoiId()).getLng(),poiMapper.findById(demand.getOriginPoiId()).getLat(),poiMapper.findById(demand.getDestinationPoiId()).getLat());
+                double distance2 = calculateDistance(poiMapper.findById(demand.getOriginPoiId()).getLng(),poiMapper.findById(demand.getDestinationPoiId()).getLat(),poiMapper.findById(demand.getOriginPoiId()).getLng(),poiMapper.findById(demand.getDestinationPoiId()).getLat());
                 VehicleType type = vehicleTypeMap.get(vehicle.getTypeId());
                 if (type == null) continue;
 

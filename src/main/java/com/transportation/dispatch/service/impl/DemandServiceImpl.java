@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Random;
 
@@ -104,18 +105,17 @@ public class DemandServiceImpl implements DemandService {
         }
 
         Poi destPoi = getRandomPoiByType(stage.getDestinationPoiType());
-
         if (originPoi != null && destPoi != null && !originPoi.getId().equals(destPoi.getId())) {
-        TransportDemand demand = new TransportDemand();
-        demand.setOriginPoiId(originPoi.getId());
-        demand.setDestinationPoiId(destPoi.getId());
-        demand.setCargoName(stage.getCargoName());
-        demand.setCargoWeight(stage.getCargoWeight());
-        demand.setCargoVolume(stage.getCargoVolume());
-        demand.setStatus(DemandStatus.PENDING);
-        demand.setTemplateId(stage.getTemplateId());
-        demand.setStageOrder(stage.getStageOrder());
-        transportDemandMapper.insert(demand);
+            TransportDemand demand = new TransportDemand();
+            demand.setOriginPoiId(originPoi.getId());
+            demand.setDestinationPoiId(destPoi.getId());
+            demand.setCargoName(stage.getCargoName());
+            demand.setCargoWeight(stage.getCargoWeight());
+            demand.setCargoVolume(stage.getCargoVolume());
+            demand.setStatus(DemandStatus.PENDING);
+            demand.setTemplateId(stage.getTemplateId());
+            demand.setStageOrder(stage.getStageOrder());
+            transportDemandMapper.insert(demand);
     }
 }
 
